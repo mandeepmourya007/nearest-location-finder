@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Find Nearest Location</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f9fafb;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 800px;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      text-align: center;
+    }
+    button {
+      padding: 10px 20px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      font-size: 16px;
+      cursor: pointer;
+      margin-bottom: 20px;
+      display: block;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .location-card {
+      background: #e0f2fe;
+      border-left: 4px solid #0284c7;
+      padding: 10px;
+      margin-bottom: 10px;
+      border-radius: 5px;
+    }
+    a {
+      color: #0284c7;
+      text-decoration: none;
+      font-weight: bold;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📍 Nearest Location Finder</h1>
+    <button onclick="findNearest()">Find Top 3 Nearest</button>
+
+    <h2>Top 3 Nearest</h2>
+    <div id="result">Click the button above to find nearby places.</div>
+
+    <h2>All Locations</h2>
+    <div id="allLocations">Loading...</div>
+  </div>
+
+  <script>
+    const TEXT_FILE_URL = 'https://gist.githubusercontent.com/mandeepmourya007/bca1a35609fe48bdf46d2acd5e426088/raw/gistfile1.txt';
+    let allLocations = [];
+
+    function getDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) ** 2 +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon / 2) ** 2;
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    function extractLocationData(url) {
+      const nameMatch = url.match(/\/place\/([^/]+)/);
+      const latLngMatch = url.match(/@([0-9.\-]+),([0-9.\-]+)/);
+
+      if (nameMatch && latLngMatch) {
+        const name = decodeURIComponent(nameMatch[1].replace(/\+/g, ' '));
+        const lat = parseFloat(latLngMatch[1]);
+        const lng = parseFloat(latLngMatch[2]);
+        return { name, lat, lng, url };
+      }
+      return null;
+    }
+
+    function loadLocations() {
+      fetch(TEXT_FILE_URL)
+        .then(res => res.text())
+        .then(text => {
+          const urls = text.split('\n').map(l => l.trim()).filter(l => l.startsWith("http"));
+          allLocations = urls.map(extractLocationData).filter(Boolean);
+
+          const listDiv = document.getElementById("allLocations");
+          if (allLocations.length === 0) {
+            listDiv.innerHTML = "<em>No valid locations found.</em>";
+            return;
+          }
+
+          listDiv.innerHTML = allLocations.map(loc => `
+            <div class="location-card">
+              <strong>${loc.name}</strong><br/>
+              📍 ${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}<br/>
+              <a href="${loc.url}" target="_blank">Open in Maps</a>
+            </div>
+          `).join('');
+        })
+        .catch(err => {
+          document.getElementById("allLocations").textContent = "❌ Failed to load list.";
+        });
+    }
+
+    function findNearest() {
+      const resultDiv = document.getElementById("result");
+      resultDiv.textContent = "Getting your location...";
+
+      if (!navigator.geolocation) {
+        resultDiv.textContent = "Geolocation not supported by your browser.";
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(position => {
+        const userLat = position.coords.latitude;
+        const userLng = position.coords.longitude;
+
+        const distances = allLocations.map(loc => ({
+          ...loc,
+          distance: getDistance(userLat, userLng, loc.lat, loc.lng)
+        }));
+
+        distances.sort((a, b) => a.distance - b.distance);
+        const nearest = distances.slice(0, 3);
+
+        resultDiv.innerHTML = nearest.map(loc => `
+          <div class="location-card">
+            <strong>${loc.name}</strong><br/>
+            📏 ${loc.distance.toFixed(2)} km away<br/>
+            <a href="${loc.url}" target="_blank">Open in Maps</a>
+          </div>
+        `).join('');
+      }, error => {
+        resultDiv.textContent = "Failed to get your location.";
+      });
+    }
+
+    window.onload = loadLocations;
+  </script>
+</body>
+</html>
